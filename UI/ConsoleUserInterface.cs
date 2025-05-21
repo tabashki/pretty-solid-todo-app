@@ -1,6 +1,4 @@
 
-using System.Globalization;
-
 namespace SolidTodo
 {
     /// <summary>
@@ -9,7 +7,8 @@ namespace SolidTodo
     /// </summary>
     public class ConsoleUserInterface : IUserInterface
     {
-        private readonly ITodoRepository todoRepository;
+        private ITodoRepository todoRepository;
+        private TodoUndoProvider undoProvider;
 
 #region Private helpers
         /// <summary>
@@ -105,9 +104,31 @@ namespace SolidTodo
             var input = ConsoleSelect(message, ["y", "yes", "n", "no"], "n");
             return input == "y" || input == "yes";
         }
+
+        private string ToFriendlyString(TimeSpan span)
+        {
+            string result = string.Empty;
+            if (span.Days > 0)
+            {
+                result += $"{span.Days} day(s)";
+            }
+            if (span.Hours > 0)
+            {
+                result += $"{span.Hours} hour(s)";
+            }
+            if (span.Minutes > 0)
+            {
+                result += $"{span.Minutes} minute(s)";
+            }
+            if (span.Seconds > 0)
+            {
+                result += $"{span.Seconds} second(s)";
+            }
+            return result;
+        }
 #endregion
 
-#region Command handling
+        #region Command handling
         private TodoItem? GetTodoItemFromUserInput()
         {
             var count = todoRepository.ItemCount;
@@ -178,6 +199,8 @@ namespace SolidTodo
         {
             Console.WriteLine("\n======== New Todo Item ========");
 
+            undoProvider.RecordUndoState();
+
             var item = CreateNewTodoItem();
             todoRepository.Add(item);
             todoRepository.SaveChanges();
@@ -190,7 +213,7 @@ namespace SolidTodo
             var item = GetTodoItemFromUserInput();
             if (item == null)
             {
-                DisplayError($"Todo item not found.");
+                DisplayError("Todo item not found.");
                 return;
             }
 
@@ -202,11 +225,13 @@ namespace SolidTodo
             var item = GetTodoItemFromUserInput();
             if (item == null)
             {
-                DisplayError($"Todo item not found.");
+                DisplayError("Todo item not found.");
                 return;
             }
 
             Console.WriteLine("\n======== Update Todo Item ========");
+
+            undoProvider.RecordUndoState();
 
             item = UpdateTodoItem(item);
             todoRepository.Update(item);
@@ -220,7 +245,7 @@ namespace SolidTodo
             var item = GetTodoItemFromUserInput();
             if (item == null)
             {
-                DisplayError($"Todo item not found.");
+                DisplayError("Todo item not found.");
                 return;
             }
 
@@ -228,12 +253,13 @@ namespace SolidTodo
 
             if (GetConfirmation("Are you sure you want to delete this todo item?"))
             {
+                undoProvider.RecordUndoState();
+
                 todoRepository.Delete(item.Id);
                 todoRepository.SaveChanges();
 
                 DisplayMessage("Todo item deleted successfully.");
             }
-
         }
 
         /// <summary>
@@ -244,21 +270,35 @@ namespace SolidTodo
             var item = GetTodoItemFromUserInput();
             if (item == null)
             {
-                DisplayError($"Todo item not found.");
+                DisplayError("Todo item not found.");
                 return;
             }
 
-            // Use the item's SetCompleted method
-            item.UpdateCompleted(true);
+            undoProvider.RecordUndoState();
 
+            item.UpdateCompleted(true);
             todoRepository.Update(item);
             todoRepository.SaveChanges();
 
             DisplayMessage("Todo item marked as completed.");
         }
+
+        private void CommandUndo()
+        {
+            if (undoProvider.UndoLastChange(out DateTime prevStateTime))
+            {
+                todoRepository.SaveChanges();
+                TimeSpan ago = DateTime.Now - prevStateTime;
+                DisplayMessage($"Restored to state from {ToFriendlyString(ago)} ago.");
+            }
+            else
+            {
+                DisplayMessage("Already at the oldest change.");
+            }
+        }
 #endregion
 
-#region IUserInterface impl
+        #region IUserInterface impl
         public void ShowMainMenu()
         {
             bool exit = false;
@@ -271,12 +311,13 @@ namespace SolidTodo
             Console.WriteLine("    u - Update todo");
             Console.WriteLine("    d - Delete todo");
             Console.WriteLine("    c - Mark todo as completed");
+            Console.WriteLine("    z - Undo last action");
             Console.WriteLine("    x - Exit");
 
             while (!exit)
             {
                 var choice = ConsoleSelect("Choose action", [
-                    "v", "a", "i", "u", "d", "c", "x"
+                    "v", "a", "i", "u", "d", "c", "z", "x",
                 ]);
 
                 switch (choice)
@@ -298,6 +339,9 @@ namespace SolidTodo
                         break;
                     case "c":
                         CommandComplete();
+                        break;
+                    case "z":
+                        CommandUndo();
                         break;
                     case "x":
                         exit = true;
@@ -400,12 +444,12 @@ namespace SolidTodo
             WriteLineWithColor($"ERROR: {message}", ConsoleColor.Red);
         }
 
+        #endregion
 
-#endregion
-
-        public ConsoleUserInterface(ITodoRepository todoRepository)
+        public ConsoleUserInterface(ITodoRepository todoRepo)
         {
-            this.todoRepository = todoRepository;
+            todoRepository = todoRepo;
+            undoProvider = new TodoUndoProvider(todoRepository);
         }
     }
 }

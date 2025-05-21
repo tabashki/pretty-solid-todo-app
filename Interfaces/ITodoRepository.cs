@@ -62,5 +62,15 @@ namespace SolidTodo
         /// Saves all changes to the storage
         /// </summary>
         void SaveChanges();
+
+        /// <summary>
+        /// Creates a snapshot of the repository state
+        /// </summary>
+        TodoSnapshot CreateSnapshot();
+
+        /// <summary>
+        /// Restores the repository state from a snapshot
+        /// </summary>
+        void RestoreSnapshot(TodoSnapshot snapshot);
     }
 }

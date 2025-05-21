@@ -144,6 +144,17 @@ namespace SolidTodo
             }
         }
 
+        public TodoSnapshot CreateSnapshot()
+        {
+            return new TodoSnapshot(todoItems);
+        }
+
+        public void RestoreSnapshot(TodoSnapshot snapshot)
+        {
+            todoItems = snapshot.TodoItems;
+            hasUnsavedChanges = true;
+        }
+
         /// <summary>
         /// Initializes a new instance of the repository class with a given
         /// storage provider implementation
