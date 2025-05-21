@@ -12,8 +12,6 @@ namespace SolidTodo
         private bool isLoaded;
         private bool hasUnsavedChanges = false;
 
-        public int ItemCount => todoItems.Count;
-
         /// <summary>
         /// Ensures that todo items are loaded from the storage provider
         /// </summary>
@@ -24,6 +22,15 @@ namespace SolidTodo
                 todoItems = storageProvider.Load().ToList();
                 SortByPriority();
                 isLoaded = true;
+            }
+        }
+
+        public int ItemCount
+        {
+            get
+            {
+                EnsureLoaded();
+                return todoItems.Count;
             }
         }
 
